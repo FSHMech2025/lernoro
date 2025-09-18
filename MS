@@ -1,0 +1,237 @@
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+"""These libraries are the basic tools we use:
+
+pandas: for reading Excel files and working with data (tables)
+
+numpy: for arrays and numerical computations
+
+matplotlib, seaborn: for plotting graphs
+"""
+
+def generate_ms_data(n=100, noise=0.5):
+    np.random.seed(42)
+    Age = np.linspace(20, 50, n)
+
+   # Instead of X, we want to use age
+    # Ground truth line: y = 3x + 8
+    true_slope = 3
+    true_intercept = 8
+    noise = np.random.randn(n) * noise
+    # Generate random noise from a normal (Gaussian) distribution with standard deviation noise.
+    EDSS = true_slope * Age + true_intercept + noise
+    # Disability status = EDSS
+    return Age, EDSS
+
+"""n: number of data points.
+
+noise: the amount of noise to simulate realism.
+
+np.random.seed(42): Ensures that random results are reproducible (same results every time).
+"""
+
+Age, EDSS = generate_ms_data(n=50, noise=10)
+plt.scatter(Age, EDSS, color='blue', label='Data Points')
+plt.title("Generated Data (Univariate)")
+plt.xlabel("$Age$")
+plt.ylabel("$EDSS$")
+plt.legend()
+plt.show()
+
+"""ChatGPT said:
+EDSS in MS data refers to the Expanded Disability Status Scale. This is a standard and widely used scale in medicine for measuring the physical disability of patients with Multiple Sclerosis (MS).
+
+Simple and practical explanation of EDSS:
+EDSS is rated from 0 to 10:
+
+0: No signs of disability (completely healthy)
+
+10: Death due to MS
+
+Values between these extremes represent different levels of disability.
+
+Summary table of the EDSS scale:
+EDSS Score	Description
+0	No symptoms or disability
+1.0-3.5	Mild symptoms, no walking problems
+4.0-5.5	Reduced functionality, walking is still possible but with limitations
+6.0-7.5	Need for a cane or wheelchair
+8.0-9.5	Severely limited, mostly bedridden or in a wheelchair
+10	Death due to MS
+
+Why is EDSS important?
+In MS-related research and data, EDSS is used to evaluate disease progression, assess the impact of treatments, and categorize patients based on disease severity.
+
+If you're working with MS patient data, the EDSS column typically indicates the patient's physical and motor status level.
+
+## Linear Regression: Analytical Solution
+
+## Polynomial Regression: Analytical Solution
+"""
+
+def polynomial_features(Age, degree):
+    X_poly = np.c_[np.ones(len(Age))]
+    for i in range(1, degree + 1):
+        X_poly = np.c_[X_poly, Age**i]
+    return X_poly
+
+def polynomial_regression(Age, EDSS, degree):
+    X_poly = polynomial_features(Age, degree)
+    # Closed-form solution: w = (X'^T * X')^-1 * X'^T * y
+    # This is the classical linear regression method (without Gradient Descent).
+    w = np.linalg.inv(X_poly.T.dot(X_poly)).dot(X_poly.T).dot(EDSS)
+    return w
+
+m = 5 # Degree of the polynomial regression
+w_ms   = polynomial_regression(Age, EDSS, m)  # Parameter vector w
+
+print(f"Parameters (w) for Degree {m}: {w_ms  }")
+
+X_fit = np.linspace(Age.min(), Age.max(), 200)
+X_fit_poly = polynomial_features(X_fit, m)
+y_poly_pred = X_fit_poly.dot(w_ms ) # h_w(x) = X' * w
+
+# Plot the actual data and the polynomial fit
+plt.scatter(Age, EDSS, color='blue', label='Actual Data')
+plt.plot(X_fit, y_poly_pred, color='green', label=f'Polynomial Fit (Degree {m})')
+# The green line → the curve that your model has learned to "fit" the data.
+# This curve represents the polynomial regression model's prediction for each x value.
+
+plt.title(f"Polynomial Regression (Degree {m})")
+plt.xlabel("$Age$")
+plt.ylabel("$EDSS$")
+plt.legend()
+plt.show()
+
+"""[link text](https:// [link text](https://))## Visualizing $E_{rms}$ (Root Mean Square Error)
+The Root Mean Square Error (RMSE) helps us understand how well our model fits the data.
+"""
+
+def compute_rms_error(y_true, y_pred):
+    return np.sqrt(np.mean((y_true - y_pred) ** 2))
+# RMSE is a standard metric for measuring error. The lower it is, the better the model is at making predictions.
+
+"""### Visualizing RMSE for different Polynomial degrees
+We could visualize the $ E_{rms} $ better if we split generated data into train and test datasets:
+"""
+
+from sklearn.model_selection import train_test_split
+
+# Split the data into 80% training and 20% testing
+X_train, X_test, y_train, y_test = train_test_split(Age, EDSS, test_size=0.2, random_state=42)
+# This ensures that the model is not just working on data it has seen, but can generalize well to new data.
+
+degrees = range(0, 9)
+# We want to check how the model performs with different polynomial degrees (from 0 to 8).
+train_rms_errors = []
+test_rms_errors = []
+
+for d in degrees:
+    # Train the model on the training set
+    w_ms = polynomial_regression(X_train, y_train, d)
+
+    # Compute predictions for the training set
+    X_train_poly = polynomial_features(X_train, d)
+    y_train_pred = X_train_poly.dot(w_ms)
+
+
+    # Compute predictions for the test set
+    X_test_poly = polynomial_features(X_test, d)
+    y_test_pred = X_test_poly.dot(w_ms)
+
+    # Calculate RMSE for both training and test sets
+    train_rms_error = compute_rms_error(y_train, y_train_pred)
+    test_rms_error = compute_rms_error(y_test, y_test_pred)
+
+    # Store the errors
+    train_rms_errors.append(train_rms_error)
+    test_rms_errors.append(test_rms_error)
+
+    # Print the RMSE for the current degree
+    print(f"Degree {d}: Train RMSE = {train_rms_error:.2f}, Test RMSE = {test_rms_error:.2f}")
+
+    # Plot the polynomial fit on the training data
+    plt.scatter(X_train, y_train, color='blue', label="Training Data")
+    plt.scatter(X_test, y_test, color='red', label="Test Data", alpha=0.6)
+    X_fit = np.linspace(Age.min(), Age.max(), 200)
+    X_fit_poly = polynomial_features(X_fit, d)
+    y_fit_pred = X_fit_poly.dot(w_ms)
+    plt.plot(X_fit, y_fit_pred, label=f"Degree {d} Fit", color='green')
+    plt.title(f"Polynomial Regression (Degree {d})")
+    plt.xlabel("$Age$")
+    plt.ylabel("$EDSS$")
+    plt.legend()
+    plt.show()
+
+# Plot RMSE for training and test sets
+plt.plot(degrees, train_rms_errors, marker='o', linestyle='-', color='blue', label='Train RMSE')
+plt.plot(degrees, test_rms_errors, marker='o', linestyle='-', color='red', label='Test RMSE')
+plt.title("Train vs Test RMSE vs Polynomial Degree")
+plt.xlabel("Polynomial Degree")
+plt.ylabel("RMSE")
+plt.xticks(degrees)
+plt.grid(True)
+plt.legend()
+plt.show()
+
+"""Interpretation:
+🟢 Degree 0 (Fixed model - only the average):
+This model only predicts a constant value (no x involved).
+
+RMSE is very high (Train = 26.46, Test = 26.44)
+→ Severe underfitting; the model didn't consider any relationship between X and y.
+
+🟢 Degree 1 (Linear model):
+Here, a linear model (i.e., y = w1 * x + w0) is used.
+
+RMSE improves significantly (Train = 9.16, Test = 8.97)
+→ The model has learned the general pattern of the data.
+
+🟢 Degrees 2 to 5 (Simple polynomial models):
+Errors continue to decrease.
+
+Train and Test RMSE are close for degrees 3 to 5:
+
+Degree 3: Test RMSE = 8.23
+
+Degree 5: Test RMSE = 8.06 (lowest error!)
+
+✅ This means:
+
+The model has learned well and hasn't overfitted.
+
+The model's accuracy is improving without excessive test error.
+
+🟡 Degree 6 and 7:
+Train RMSE still decreases (to 8.40).
+
+But Test RMSE starts increasing.
+
+Degree 7: Test RMSE = 8.81
+
+❗ Signs of overfitting appear:
+
+The model is fitting itself too much to the training data.
+
+But it performs worse on new (Test) data.
+
+🔴 Degree 8:
+Train RMSE suddenly increases to 14.12.
+
+Test RMSE also rises to 15.38.
+
+❌ Severe overfitting:
+
+The model has become so complex that it's learning the noise in the data.
+
+This causes poor performance on both the training and test data.
+
+📈 RMSE Plot (Train vs Test vs Degree)
+In this plot, we typically have three regions:
+
+1. Underfitting (degrees 0 to 1):
+The error is high on both sets.
+
+"""
