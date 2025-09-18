@@ -1,0 +1,63 @@
+import cv2, mediapipe as mp, serial, time, math
+
+SERIAL_PORT = "COM4"   
+BAUD = 115200
+
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD, timeout=1)
+    time.sleep(2)
+    print("Connected to Arduino")
+except:
+    ser = None
+    print("⚠️ Arduino not connected")
+
+
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+cap = cv2.VideoCapture(0)
+
+def send_angle(angle):
+    if ser:
+        ser.write(f"S,{angle}\n".encode())
+    else:
+        print(f"[Simulated] Angle = {angle}")
+
+with mp_hands.Hands(
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5,
+    max_num_hands=1) as hands:
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        img = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        res = hands.process(rgb)
+
+        if res.multi_hand_landmarks:
+            lm = res.multi_hand_landmarks[0].landmark
+            wx, wy = lm[0].x, lm[0].y
+            ix, iy = lm[5].x, lm[5].y
+
+            dx, dy = ix - wx, iy - wy
+            angle = math.degrees(math.atan2(-dy, dx))
+            servo_angle = int((angle + 90) / 180 * 180)  # نگاشت تقریبی
+            servo_angle = max(0, min(180, servo_angle))
+
+            send_angle(servo_angle)
+
+            mp_drawing.draw_landmarks(img, res.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
+            cv2.putText(img, f"Servo: {servo_angle}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+        else:
+            cv2.putText(img, "No hand", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+
+        cv2.imshow("Hand Control", img)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+cap.release()
+cv2.destroyAllWindows()
+if ser:
+    ser.close()
