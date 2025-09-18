@@ -21,5 +21,5 @@ Lernoro is a research project that applies AI and machine learning to healthcare
 You can find example notebooks and visualizations that demonstrate the project's approach without revealing sensitive algorithms or patient data.
 
 ## Contact
-For collaboration or further information, please contact: [Your Email]
+For collaboration or further information, please contact: fatemeh.orakshirani.mechatronics@gmail.com
 
