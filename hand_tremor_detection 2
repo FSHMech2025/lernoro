@@ -1,0 +1,86 @@
+import cv2, mediapipe as mp
+import numpy as np
+import matplotlib.pyplot as plt
+from collections import deque
+from scipy.signal import find_peaks
+
+
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+cap = cv2.VideoCapture(0)
+
+buffer_size = 200
+x_history = deque(maxlen=buffer_size)
+y_history = deque(maxlen=buffer_size)
+
+
+AMPLITUDE_THRESHOLD = 0.01  
+FREQ_THRESHOLD = 1.5       
+
+def compute_rms_velocity(arr, fps=30):
+    
+    arr = np.array(arr)
+    vel = np.diff(arr)
+    rms = np.sqrt(np.mean(vel**2)) * fps
+    return rms
+
+with mp_hands.Hands(min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5,
+                    max_num_hands=1) as hands:
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        img = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        res = hands.process(rgb)
+
+        if res.multi_hand_landmarks:
+            lm = res.multi_hand_landmarks[0].landmark
+            x, y = lm[8].x, lm[8].y
+            x_history.append(x)
+            y_history.append(y)
+
+            mp_drawing.draw_landmarks(img, res.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
+            cv2.putText(img, "Tracking finger", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0),2)
+        else:
+            cv2.putText(img, "No hand", (20,40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255),2)
+
+        
+        if len(x_history) > 10:
+            canvas = np.zeros((200, 400, 3), dtype=np.uint8)
+            x_norm = np.array(x_history) * 400
+            y_norm = np.array(y_history) * 200
+            for i in range(1, len(x_norm)):
+                cv2.line(canvas, (int(x_norm[i-1]), int(y_norm[i-1])),
+                         (int(x_norm[i]), int(y_norm[i])), (255,0,0), 2)
+            cv2.imshow("Tremor Plot", canvas)
+
+        cv2.imshow("Hand Tracking", img)
+        if cv2.waitKey(1) & 0xFF == 27:  
+            break
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+rms_x = compute_rms_velocity(x_history)
+rms_y = compute_rms_velocity(y_history)
+amplitude = (rms_x + rms_y)/2
+
+
+y_arr = np.array(y_history)
+peaks, _ = find_peaks(y_arr, distance=2)
+freq_est = len(peaks)/(len(y_arr)/30)  
+
+
+if amplitude > AMPLITUDE_THRESHOLD and freq_est > FREQ_THRESHOLD:
+    result = "⚠️ Possible tremor (MS-like)"
+else:
+    result = "✅ Hand movement normal"
+
+print(f"Amplitude (RMS velocity) = {amplitude:.4f}")
+print(f"Estimated frequency = {freq_est:.2f} Hz")
+print("Result:", result)
