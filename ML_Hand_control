@@ -1,0 +1,103 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from collections import deque
+import math
+from sklearn.ensemble import RandomForestClassifier
+import pickle
+
+
+WINDOW_SIZE = 50  
+ANGLE_BUFFER = deque(maxlen=WINDOW_SIZE)
+TIME_BUFFER = deque(maxlen=WINDOW_SIZE)
+FPS = 30 
+X_train = np.random.rand(100, 2)  
+y_train = np.random.randint(0, 2, 100)  
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+
+
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+cap = cv2.VideoCapture(0)
+
+def calculate_angle(lm):
+    wx, wy = lm[0].x, lm[0].y
+    ix, iy = lm[5].x, lm[5].y
+    dx, dy = ix - wx, iy - wy
+    angle = math.degrees(math.atan2(-dy, dx))
+    servo_angle = int((angle + 90) / 180 * 180)
+    return max(0, min(180, servo_angle))
+
+def compute_features(angle_buffer):
+    arr = np.array(angle_buffer)
+    if len(arr) < 2:
+        return [0,0]
+    
+    amplitude = np.std(arr)
+    
+    fft = np.fft.fft(arr - np.mean(arr))
+    freq = np.argmax(np.abs(fft[:len(fft)//2]))
+    return [amplitude, freq]
+
+
+plt.ion()
+fig, ax = plt.subplots()
+line, = ax.plot([], [], 'r-')
+ax.set_ylim(0, 180)
+ax.set_xlim(0, WINDOW_SIZE)
+plt.xlabel("Frames")
+plt.ylabel("Angle")
+
+with mp_hands.Hands(
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5,
+    max_num_hands=1) as hands:
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        img = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        res = hands.process(rgb)
+
+        if res.multi_hand_landmarks:
+            lm = res.multi_hand_landmarks[0].landmark
+            angle = calculate_angle(lm)
+
+            
+            ANGLE_BUFFER.append(angle)
+            TIME_BUFFER.append(len(TIME_BUFFER))
+
+            
+            features = compute_features(ANGLE_BUFFER)
+            pred = clf.predict([features])[0]
+            status = "Normal" if pred==0 else "MS-like"
+
+            
+            line.set_xdata(range(len(ANGLE_BUFFER)))
+            line.set_ydata(list(ANGLE_BUFFER))
+            ax.relim()
+            ax.autoscale_view()
+            plt.pause(0.001)
+
+    
+            cv2.putText(img, f"Angle: {angle}", (20,40), cv2.FONT_HERSHEY_SIMPLEX,1,(0,255,0),2)
+            cv2.putText(img, f"Amplitude: {features[0]:.1f}", (20,80), cv2.FONT_HERSHEY_SIMPLEX,1,(255,0,0),2)
+            cv2.putText(img, f"Freq: {features[1]}", (20,120), cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
+            cv2.putText(img, f"Status: {status}", (20,160), cv2.FONT_HERSHEY_SIMPLEX,1,(0,255,255),2)
+
+            mp_drawing.draw_landmarks(img, res.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
+        else:
+            cv2.putText(img, "No hand detected", (20,40), cv2.FONT_HERSHEY_SIMPLEX,1,(0,0,255),2)
+
+        cv2.imshow("ML Hand Control", img)
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+
+cap.release()
+cv2.destroyAllWindows()
