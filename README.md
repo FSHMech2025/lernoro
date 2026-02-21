@@ -13,7 +13,6 @@ Lernoro is a research project that applies AI and machine learning to healthcare
 - AI-driven models for disease progression monitoring  
 - Simulation tools for enhanced personalization and predictive accuracy  
 
-> **Note:** The full implementation details are currently under patent consideration. Only non-sensitive documentation and public demonstrations are included here.
 
 ---
 
