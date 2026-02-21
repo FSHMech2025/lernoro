@@ -1,5 +1,5 @@
 # Lernoro – AI/ML for Personalized Health Monitoring
-**Project Status:** Early development / Patent pending
+
 
 ---
 
